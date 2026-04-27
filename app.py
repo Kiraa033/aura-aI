@@ -4,10 +4,9 @@ import base64
 from streamlit_mic_recorder import mic_recorder
 import io
 
-# 1. Page Config
+# 1. Professional Minimalist UI
 st.set_page_config(page_title="AURA", page_icon="✨", layout="centered")
 
-# 2. Modern CSS (No clutter, pure professional look)
 st.markdown("""
     <style>
     .stApp { background-color: #000000; color: #FFFFFF; }
@@ -15,12 +14,13 @@ st.markdown("""
     
     .brand { 
         color: #FFD700; font-family: 'Inter', sans-serif; font-weight: 200; 
-        letter-spacing: 6px; text-align: center; padding-top: 20px; font-size: 32px;
+        letter-spacing: 8px; text-align: center; padding-top: 40px; font-size: 35px;
     }
     
     .stTextArea textarea {
         background-color: #111111 !important; color: white !important;
         border: 1px solid #222 !important; border-radius: 15px !important;
+        padding: 20px !important;
     }
 
     .stButton>button {
@@ -29,57 +29,59 @@ st.markdown("""
         position: fixed; bottom: 30px; right: 30px; z-index: 1000; border: none;
     }
 
-    .icon-label { text-align: center; font-size: 24px; margin-top: -40px; }
+    .icon-box { text-align: center; font-size: 26px; margin-top: -45px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Silent API Key Fetch
+# 2. Key Fetching Logic
 try:
-    # Pulls directly from the TOML you set up in Step 1
+    # This must match the name in your Secrets exactly
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-except Exception as e:
+except Exception:
     st.error("Missing Secrets Configuration.")
     st.stop()
 
-# 4. Interface
+# 3. App Layout
 st.markdown('<div class="brand">AURA</div>', unsafe_allow_html=True)
 st.write("---")
 
-# Text Input
-situation = st.text_area("", placeholder="Speak...", height=150, label_visibility="collapsed")
+# Invisible Label Input
+situation = st.text_area("", placeholder="What is the context?", height=150, label_visibility="collapsed")
 
-# Tool Icons
+# Tools Row
 c1, c2, c3 = st.columns(3)
 with c1:
     st.file_uploader("", type=['png', 'jpg'], key="img", label_visibility="collapsed")
-    st.markdown('<div class="icon-label">🖼️</div>', unsafe_allow_html=True)
+    st.markdown('<div class="icon-box">🖼️</div>', unsafe_allow_html=True)
 with c2:
     st.markdown('<div style="text-align:center; margin-top:-10px;">', unsafe_allow_html=True)
     voice = mic_recorder(start_prompt="🎙️", stop_prompt="🛑", key='mic')
     st.markdown('</div>', unsafe_allow_html=True)
 with c3:
     st.file_uploader("", type=['mp4'], key="vid", label_visibility="collapsed")
-    st.markdown('<div class="icon-label">🎥</div>', unsafe_allow_html=True)
+    st.markdown('<div class="icon-box">🎥</div>', unsafe_allow_html=True)
 
-# Energy Slider
+# Stealth Energy Slider
+st.write("")
 energy = st.select_slider("", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"], label_visibility="collapsed")
 
-# Execute
+# Floating Action Arrow
 if st.button("", icon=":material/arrow_forward:"):
     if situation or voice:
         with st.spinner(""):
-            final_msg = situation
+            final_text = situation
             if voice:
                 buf = io.BytesIO(voice['bytes'])
                 buf.name = "audio.wav"
                 trans = client.audio.transcriptions.create(file=buf, model="whisper-large-v3", response_format="text")
-                final_msg += f" {trans}"
+                final_text += f" {trans}"
             
+            # AI Refinement
             resp = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": f"High-status {energy} rewrite. Sharp and concise."},
-                    {"role": "user", "content": final_msg}
+                    {"role": "system", "content": f"High-status {energy} rewrite. Sharp, concise, and professional."},
+                    {"role": "user", "content": final_text}
                 ]
             )
-            st.markdown(f"<div style='background:#111; padding:20px; border-radius:15px; border-left:4px solid #FFD700; color:#FFD700;'>{resp.choices[0].message.content}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#111; padding:20px; border-radius:15px; border-left:4px solid #FFD700; color:#FFD700; margin-top:20px;'>{resp.choices[0].message.content}</div>", unsafe_allow_html=True)
