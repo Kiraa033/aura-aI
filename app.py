@@ -4,111 +4,103 @@ import base64
 from streamlit_mic_recorder import mic_recorder
 import io
 
-# 1. Page Config
+# 1. Page Configuration
 st.set_page_config(page_title="AURA", page_icon="✨", layout="centered")
 
-# 2. Advanced CSS - Stripping away all "shitty" default UI elements
+# 2. Modern Unified Input CSS
 st.markdown("""
     <style>
-    /* Pure Black Background */
+    /* Absolute Dark Mode */
     .stApp { background-color: #000000; color: #FFFFFF; }
     [data-testid="stHeader"], header, footer {display: none !important;}
     
-    /* Elegant Gold Brand */
+    /* Branding */
     .brand { 
         color: #FFD700; font-family: 'Inter', sans-serif; font-weight: 200; 
-        letter-spacing: 8px; text-align: center; padding-top: 20px; font-size: 30px; 
-    }
-    
-    /* WhatsApp-style Input Box */
-    .stTextArea textarea {
-        background-color: #111111 !important; color: white !important;
-        border: 1px solid #222 !important; border-radius: 25px !important;
-        padding: 15px 20px !important; font-size: 16px !important;
+        letter-spacing: 10px; text-align: center; padding: 20px 0; font-size: 28px; 
     }
 
-    /* FORCIBLY HIDING THE UPLOAD BOXES (The 'Jargon' you hate) */
-    .stFileUploader label { display: none !important; }
-    .stFileUploader section { 
-        background-color: transparent !important; 
-        border: none !important; 
-        padding: 0 !important; 
-        min-height: 0px !important;
+    /* THE UNIFIED BAR CONTAINER */
+    .input-container {
+        display: flex;
+        align-items: center;
+        background-color: #1a1a1a;
+        border-radius: 30px;
+        padding: 5px 15px;
+        border: 1px solid #333;
+        margin-bottom: 20px;
     }
-    div[data-testid="stFileUploaderDropzone"] {
+
+    /* Hiding Streamlit's default ugly boxes */
+    .stFileUploader { position: absolute; opacity: 0; z-index: -1; width: 0; height: 0; }
+    div[data-testid="stFileUploaderDropzone"] { display: none !important; }
+
+    /* Styling the Text Input to look like a chat bar */
+    .stTextInput input {
         background-color: transparent !important;
         border: none !important;
-        padding: 0 !important;
-    }
-    div[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
-    
-    /* Floating Yellow Arrow */
-    .stButton>button {
-        width: 65px !important; height: 65px !important;
-        border-radius: 50% !important; background-color: #FFD700 !important;
-        position: fixed; bottom: 30px; right: 20px; z-index: 1000; border: none;
-        box-shadow: 0px 0px 20px rgba(255, 215, 0, 0.4);
+        color: white !important;
+        padding: 10px !important;
     }
 
-    /* Icon Layout - Centered and Clean */
-    .icon-container { 
-        font-size: 28px; text-align: center; cursor: pointer; 
-        margin-top: -35px; /* Pulls icons up to remove the gap */
+    /* Floating Action Button */
+    .stButton>button {
+        width: 50px !important; height: 50px !important;
+        border-radius: 50% !important; background-color: #FFFFFF !important;
+        color: black !important; border: none; font-weight: bold;
     }
     
-    /* Removing the Red slider labels */
-    div[data-testid="stMetricValue"] { color: #FFD700 !important; }
+    /* Slider Styling */
+    .stSlider { padding-top: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Silent API Key Fetch
+# 3. Secure API Key
 try:
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 except:
+    st.error("System Error: Key not found.")
     st.stop()
 
-# 4. The Interface
 st.markdown('<div class="brand">AURA</div>', unsafe_allow_html=True)
-st.write("---")
 
-# Message Input
-situation = st.text_area("", placeholder="Message...", height=100, label_visibility="collapsed")
+# 4. UNIFIED INPUT ROW (The + icon, Text, and Mic)
+# We use columns to force them onto one line
+col_plus, col_text, col_mic = st.columns([1, 8, 1])
 
-# The Icon Row (Pure Visuals)
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+with col_plus:
+    # This is the "plus" icon that triggers your file upload
+    st.file_uploader("", type=['png', 'jpg', 'jpeg', 'mp4'], key="vault")
+    st.markdown('<div style="font-size: 30px; cursor: pointer; text-align: center; padding-top: 5px;">⊕</div>', unsafe_allow_html=True)
 
-with col1:
-    st.file_uploader("", type=['png', 'jpg'], key="img", label_visibility="collapsed")
-    st.markdown('<div class="icon-container">🖼️</div>', unsafe_allow_html=True)
+with col_text:
+    # The message box
+    msg = st.text_input("", placeholder="Ask anything...", label_visibility="collapsed")
 
-with col2:
-    st.markdown('<div style="text-align:center; margin-top:-10px;">', unsafe_allow_html=True)
-    voice = mic_recorder(start_prompt="🎙️", stop_prompt="🛑", key='mic')
+with col_mic:
+    # The live voice icon
+    st.markdown('<div style="margin-top: 5px;">', unsafe_allow_html=True)
+    voice_data = mic_recorder(start_prompt="🎙️", stop_prompt="🛑", key='mic_bar')
     st.markdown('</div>', unsafe_allow_html=True)
 
-with col3:
-    st.file_uploader("", type=['mp4'], key="vid", label_visibility="collapsed")
-    st.markdown('<div class="icon-container">🎥</div>', unsafe_allow_html=True)
+# 5. Energy Selection (Minimalist)
+energy = st.select_slider("", options=["Soft", "Unbothered", "Confident", "CEO", "Bold"], label_visibility="collapsed")
 
-with col4:
-    st.markdown('<div class="icon-container">📁</div>', unsafe_allow_html=True)
-
-# Energy Slider
+# 6. The Send Button (White Circle Icon)
 st.write("")
-energy = st.select_slider("", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"], label_visibility="collapsed")
-
-# Submit Arrow
-if st.button("", icon=":material/arrow_forward:"):
-    if situation or voice:
+if st.button("↑"):
+    if msg or voice_data:
         with st.spinner(""):
-            final_msg = situation
-            if voice:
-                b = io.BytesIO(voice['bytes']); b.name = "a.wav"
+            final_query = msg
+            if voice_data:
+                b = io.BytesIO(voice_data['bytes']); b.name = "voice.wav"
                 trans = client.audio.transcriptions.create(file=b, model="whisper-large-v3", response_format="text")
-                final_msg += f" {trans}"
+                final_query += f" {trans}"
             
             resp = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": f"Transform into {energy} energy. Concise."}, {"role": "user", "content": final_msg}]
+                messages=[{"role": "system", "content": f"You are a high-status consultant. Respond with {energy} energy."}, 
+                          {"role": "user", "content": final_query}]
             )
-            st.markdown(f"<div style='background:#111; padding:20px; border-radius:15px; border-left:4px solid #FFD700; color:#FFD700;'>{resp.choices[0].message.content}</div>", unsafe_allow_html=True)
+            
+            st.markdown(f"<div style='background:#1a1a1a; padding:20px; border-radius:15px; border-left: 3px solid #FFD700; margin-top:20px;'>{resp.choices[0].message.content}</div>", unsafe_allow_html=True)
