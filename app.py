@@ -1,94 +1,122 @@
 import streamlit as st
 from groq import Groq
+import base64
 
 # 1. Page Configuration
 st.set_page_config(page_title="AURA AI", page_icon="✨", layout="centered")
 
-# 2. Professional CSS Styling
+# 2. Professional CSS Styling (Dark/Gold Theme)
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; }
-    h1 { color: #FFD700; text-align: center; font-family: 'Inter', sans-serif; font-weight: 800; }
+    .stApp { background-color: #0e1117; color: white; }
+    h1 { color: #FFD700; text-align: center; font-weight: 800; }
     .stButton>button {
         width: 100%; border-radius: 50px; height: 3.5em;
-        background-color: #FFD700; color: #000000; border: none; transition: 0.3s;
+        background-color: #FFD700; color: #000000; border: none; font-weight: bold;
     }
-    .stButton>button:hover {
-        background-color: #e6c200; box-shadow: 0px 4px 15px rgba(255, 215, 0, 0.4);
-    }
-    .stTextArea>div>div>textarea { background-color: #1a1c24; color: white; border-radius: 10px; }
-    .stExpander { background-color: #1a1c24; border: none; border-radius: 10px; }
+    .stButton>button:hover { background-color: #e6c200; box-shadow: 0px 4px 15px rgba(255, 215, 0, 0.4); }
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] { background-color: #1a1c24; border-radius: 10px; padding: 10px 20px; color: white; }
+    .stTextArea textarea { background-color: #1a1c24 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Initialize Session State for History
+# 3. Initialize History
 if "history" not in st.session_state:
     st.session_state.history = []
 
-st.markdown("<h1>AURA AI</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #888;'>Professional Status & Communication Suite</p>", unsafe_allow_html=True)
+st.markdown("<h1>AURA AI</h1>")
+st.markdown("<p style='text-align: center; color: #888;'>Multimodal Status & Communication Suite</p>", unsafe_allow_html=True)
 st.write("---")
 
-# 4. Sidebar Configuration
+# 4. Sidebar for API and Logs
 with st.sidebar:
-    st.header("⚙️ System Setup")
+    st.header("⚙️ Configuration")
     api_key = st.text_input("Groq API Key", type="password")
-    st.divider()
     if st.session_state.history:
-        st.subheader("📜 Recent Logs")
-        for h in reversed(st.session_state.history[-5:]):
-            st.caption(f"**{h['energy']}**: {h['msg'][:50]}...")
+        st.divider()
+        st.subheader("📜 Recent History")
+        for item in reversed(st.session_state.history[-5:]):
+            with st.expander(f"{item['energy']} Energy"):
+                st.write(item['result'])
 
-# 5. Main Interface
+# 5. Core Application Logic
 if api_key:
     try:
         client = Groq(api_key=api_key)
-
-        # Tabbed Interface for Multimedia
-        tab1, tab2, tab3 = st.tabs(["📝 Text", "📸 Media", "🎤 Voice"])
+        
+        # Tabs for Inputs
+        tab1, tab2, tab3 = st.tabs(["📝 Text", "📸 Image/Vision", "🎤 Voice"])
+        
+        context_text = ""
 
         with tab1:
-            situation = st.text_area("Context", placeholder="Describe your situation...", height=100)
+            context_text = st.text_area("Situation Context", placeholder="Describe the situation or paste a message...", height=150)
 
         with tab2:
-            st.write("Analyze visuals for better context")
-            uploaded_file = st.file_uploader("Upload Image or Video", type=['png', 'jpg', 'mp4', 'mov'])
-            if uploaded_file:
-                st.info(f"Attached: {uploaded_file.name}")
+            image_file = st.file_uploader("Upload screenshot or image", type=['png', 'jpg', 'jpeg'])
+            if image_file:
+                st.image(image_file, caption="Analysis Pending...", width=300)
 
         with tab3:
-            st.write("Audio Input")
-            audio_file = st.file_uploader("Upload Voice Note", type=['mp3', 'wav', 'm4a'])
+            audio_file = st.file_uploader("Upload voice note", type=['mp3', 'wav', 'm4a', 'ogg'])
             if audio_file:
                 st.audio(audio_file)
 
         st.write("### Select Energy")
-        aura = st.select_slider("", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"])
+        energy_level = st.select_slider("", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"])
 
-        # Final Arrow Action Button
+        # Final Action Button (Icon-only)
         if st.button("", icon=":material/arrow_forward:"):
-            if situation or uploaded_file or audio_file:
-                with st.spinner("Analyzing Status..."):
-                    # Process text (Multimedia analysis would require Vision/Whisper models in a full build)
-                    completion = client.chat.completions.create(
+            with st.spinner("Processing Multimodal Context..."):
+                final_input = context_text
+                
+                # A. Handle Audio Transcription
+                if audio_file:
+                    transcription = client.audio.transcriptions.create(
+                        file=(audio_file.name, audio_file.read()),
+                        model="whisper-large-v3",
+                        response_format="text"
+                    )
+                    final_input += f"\n[Audio Transcript: {transcription}]"
+
+                # B. Handle Image Vision
+                image_analysis = ""
+                if image_file:
+                    base64_image = base64.b64encode(image_file.getvalue()).decode('utf-8')
+                    vision_resp = client.chat.completions.create(
+                        model="llama-3.2-11b-vision-preview",
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Describe what is happening in this image briefly."},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                            ]
+                        }]
+                    )
+                    image_analysis = vision_resp.choices[0].message.content
+                    final_input += f"\n[Visual Context: {image_analysis}]"
+
+                # C. Final Refinement
+                if final_input.strip() == "":
+                    st.warning("Please provide some form of input.")
+                else:
+                    response = client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[
-                            {"role": "system", "content": f"High-status consultant mode. Transform the input into '{aura}' energy. Concise and powerful."},
-                            {"role": "user", "content": f"Context: {situation}. Energy requested: {aura}"}
+                            {"role": "system", "content": f"You are a communication strategist. Rewrite the user context using '{energy_level}' energy. Be concise and high-status."},
+                            {"role": "user", "content": final_input}
                         ]
                     )
                     
-                    result = completion.choices[0].message.content
-                    st.session_state.history.append({"energy": aura, "msg": result})
+                    output = response.choices[0].message.content
+                    st.session_state.history.append({"energy": energy_level, "result": output})
                     
                     st.divider()
-                    st.markdown(f"### ⚡ Optimized Output")
-                    st.success(result)
-                    st.button("📋 Copy Response")
-            else:
-                st.warning("Please provide input via text, media, or voice.")
-
+                    st.subheader(f"⚡ {energy_level} Output:")
+                    st.success(output)
+                    
     except Exception as e:
         st.error(f"System Error: {e}")
 else:
-    st.info("Please enter your API credentials in the sidebar.")
+    st.info("Please enter your Groq API Key in the sidebar to activate all features.")
