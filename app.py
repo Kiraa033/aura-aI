@@ -7,10 +7,9 @@ import io
 # 1. Page Config
 st.set_page_config(page_title="AURA", page_icon="✨", layout="centered")
 
-# 2. The "ChatGPT-Style" CSS (Hiding all the jargon)
+# 2. Functional CSS
 st.markdown("""
     <style>
-    /* Absolute Dark Mode */
     .stApp { background-color: #000000; color: #FFFFFF; }
     [data-testid="stHeader"], header, footer {display: none !important;}
     
@@ -19,90 +18,97 @@ st.markdown("""
         letter-spacing: 10px; text-align: center; padding: 20px 0; font-size: 32px; 
     }
 
-    /* FORCING HORIZONTAL ALIGNMENT */
-    [data-testid="column"] {
+    /* THE CHAT BAR CONTAINER */
+    .chat-container {
         display: flex;
         align-items: center;
-        justify-content: center;
+        background-color: #1a1a1a;
+        border-radius: 30px;
+        padding: 5px 15px;
+        border: 1px solid #333;
     }
 
-    /* Hiding the default 'Upload' box and jargon completely */
-    .stFileUploader { position: absolute; opacity: 0; z-index: -1; width: 0; }
-    div[data-testid="stFileUploaderDropzone"] { display: none !important; }
-
-    /* The Text Box - No Border, No Label */
+    /* Making the uploaders invisible but clickable */
+    .stFileUploader {
+        position: absolute;
+        z-index: 2;
+        opacity: 0; /* This makes it invisible but it still sits over the + icon */
+        width: 40px;
+    }
+    
+    /* Text Input Styling */
     .stTextInput input {
-        background-color: #1a1a1a !important;
+        background-color: transparent !important;
+        border: none !important;
         color: white !important;
-        border: 1px solid #333 !important;
-        border-radius: 25px !important;
-        padding: 12px 20px !important;
     }
 
-    /* Icons */
-    .plus-btn { font-size: 32px; cursor: pointer; color: #888; transition: 0.3s; }
-    .plus-btn:hover { color: #FFD700; }
-
-    /* The Send Button */
+    /* Submit Button (The White Arrow) */
     .stButton>button {
         width: 50px !important; height: 50px !important;
         border-radius: 50% !important; background-color: #FFFFFF !important;
-        color: #000000 !important; border: none; font-weight: bold;
-        display: flex; align-items: center; justify-content: center;
+        color: #000 !important; border: none; font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Secure API Logic
-try:
-    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-except:
-    st.error("Secrets not configured correctly.")
-    st.stop()
+# 3. API Logic
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.markdown('<div class="brand">AURA</div>', unsafe_allow_html=True)
 
-# 4. THE UNIFIED BAR (One single line for everything)
-# [Plus] [Text Input] [Mic]
-col1, col2, col3 = st.columns([1, 8, 1])
+# 4. THE FUNCTIONAL BAR
+# We use columns to align them exactly like your screenshot
+col_plus, col_text, col_mic = st.columns([1, 8, 1])
 
-with col1:
-    # Invisible uploader triggered by the '+' icon
-    st.file_uploader("", type=['png', 'jpg', 'jpeg', 'mp4'], key="plus_vault", label_visibility="collapsed")
-    st.markdown('<div class="plus-btn">⊕</div>', unsafe_allow_html=True)
+with col_plus:
+    # This sits INVISIBLY on top of the plus icon. When you tap +, it opens your files.
+    st.file_uploader("", type=['png', 'jpg', 'jpeg', 'mp4'], key="plus_upload", label_visibility="collapsed")
+    st.markdown('<div style="font-size: 30px; color: #FFD700; pointer-events: none; margin-top: -45px;">⊕</div>', unsafe_allow_html=True)
 
-with col2:
-    # Main chat bar
-    msg = st.text_input("", placeholder="Ask anything...", label_visibility="collapsed")
+with col_text:
+    user_msg = st.text_input("", placeholder="Ask anything...", label_visibility="collapsed")
 
-with col3:
-    # Voice icon
-    st.markdown('<div style="margin-top: 5px;">', unsafe_allow_html=True)
-    voice_input = mic_recorder(start_prompt="🎙️", stop_prompt="🛑", key='chat_mic')
-    st.markdown('</div>', unsafe_allow_html=True)
+with col_mic:
+    # Functional Mic Recorder
+    # Note: If it doesn't record, ensure your site has HTTPS enabled!
+    audio_data = mic_recorder(
+        start_prompt="🎙️", 
+        stop_prompt="🛑", 
+        key='active_mic',
+        use_container_width=False
+    )
 
-# 5. The Submit Area
+# 5. Energy Selection & Send
+energy = st.select_slider("", options=["Soft", "Unbothered", "Confident", "CEO", "Bold"], label_visibility="collapsed")
+
 st.write("")
-col_left, col_right = st.columns([8, 1])
-with col_left:
-    # Hidden energy slider
-    energy = st.select_slider("", options=["Soft", "Chill", "Steady", "CEO", "Bold"], label_visibility="collapsed")
-with col_right:
-    # The Send Arrow
-    submit = st.button("↑")
-
-# 6. Response Logic
-if submit:
-    if msg or voice_input:
+if st.button("↑"):
+    if user_msg or audio_data:
         with st.spinner(""):
-            final_text = msg
-            if voice_input:
-                b = io.BytesIO(voice_input['bytes']); b.name = "input.wav"
-                trans = client.audio.transcriptions.create(file=b, model="whisper-large-v3", response_format="text")
-                final_text += f" {trans}"
+            combined_input = user_msg
             
-            resp = client.chat.completions.create(
+            # Handle the Voice recording if exists
+            if audio_data:
+                audio_bytes = audio_data['bytes']
+                buffer = io.BytesIO(audio_bytes)
+                buffer.name = "audio.wav"
+                transcription = client.audio.transcriptions.create(
+                    file=buffer, model="whisper-large-v3", response_format="text"
+                )
+                combined_input += f" [User Voice: {transcription}]"
+
+            # Response Generation
+            response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": f"High-status {energy} energy."}, {"role": "user", "content": final_text}]
+                messages=[
+                    {"role": "system", "content": f"Respond with {energy} energy. Be sharp."},
+                    {"role": "user", "content": combined_input}
+                ]
             )
-            st.markdown(f"<div style='background:#111; padding:20px; border-radius:15px; border-left:3px solid #FFD700; margin-top:20px;'>{resp.choices[0].message.content}</div>", unsafe_allow_html=True)
+            
+            st.markdown(f"<div style='background:#111; padding:20px; border-radius:15px; border-left: 3px solid #FFD700;'>{response.choices[0].message.content}</div>", unsafe_allow_html=True)
+
+# Visual Confirmation for Uploads
+if st.session_state.plus_upload:
+    st.toast("File attached successfully! 🖼️")
