@@ -4,130 +4,82 @@ import base64
 from streamlit_mic_recorder import mic_recorder
 import io
 
-# 1. Page Configuration
-st.set_page_config(page_title="AURA AI", page_icon="✨", layout="centered")
+# 1. Page Config
+st.set_page_config(page_title="AURA", page_icon="✨", layout="centered")
 
-# 2. Professional CSS Styling
+# 2. Modern CSS (No clutter, pure professional look)
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: white; }
-    h1 { color: #FFD700; text-align: center; font-weight: 800; margin-bottom: 0px; }
-    .stButton>button {
-        width: 100%; border-radius: 50px; height: 3.5em;
-        background-color: #FFD700; color: #000000; border: none; font-weight: bold;
+    .stApp { background-color: #000000; color: #FFFFFF; }
+    [data-testid="stHeader"], header, footer {display: none;}
+    
+    .brand { 
+        color: #FFD700; font-family: 'Inter', sans-serif; font-weight: 200; 
+        letter-spacing: 6px; text-align: center; padding-top: 20px; font-size: 32px;
     }
-    .stButton>button:hover { background-color: #e6c200; box-shadow: 0px 4px 15px rgba(255, 215, 0, 0.4); }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1a1c24; border-radius: 10px; padding: 10px 20px; color: white; }
-    .stTextArea textarea { background-color: #1a1c24 !important; color: white !important; }
-    /* Style for the Mic Recorder button to fit the gold theme */
-    div[data-testid="stVerticalBlock"] > div:has(button) { text-align: center; }
+    
+    .stTextArea textarea {
+        background-color: #111111 !important; color: white !important;
+        border: 1px solid #222 !important; border-radius: 15px !important;
+    }
+
+    .stButton>button {
+        width: 65px !important; height: 65px !important;
+        border-radius: 50% !important; background-color: #FFD700 !important;
+        position: fixed; bottom: 30px; right: 30px; z-index: 1000; border: none;
+    }
+
+    .icon-label { text-align: center; font-size: 24px; margin-top: -40px; }
     </style>
     """, unsafe_allow_html=True)
 
-if "history" not in st.session_state:
-    st.session_state.history = []
+# 3. Silent API Key Fetch
+try:
+    # Pulls directly from the TOML you set up in Step 1
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except Exception as e:
+    st.error("Missing Secrets Configuration.")
+    st.stop()
 
-st.markdown("<h1>AURA AI</h1>")
-st.markdown("<p style='text-align: center; color: #888;'>Multimodal Status & Communication Suite</p>", unsafe_allow_html=True)
+# 4. Interface
+st.markdown('<div class="brand">AURA</div>', unsafe_allow_html=True)
 st.write("---")
 
-# 3. Sidebar for API and Logs
-with st.sidebar:
-    st.header("⚙️ Configuration")
-    api_key = st.text_input("Groq API Key", type="password")
-    if st.session_state.history:
-        st.divider()
-        st.subheader("📜 Recent History")
-        for item in reversed(st.session_state.history[-5:]):
-            with st.expander(f"{item['energy']} Energy"):
-                st.write(item['result'])
+# Text Input
+situation = st.text_area("", placeholder="Speak...", height=150, label_visibility="collapsed")
 
-# 4. Core Application Logic
-if api_key:
-    try:
-        client = Groq(api_key=api_key)
-        
-        tab1, tab2, tab3 = st.tabs(["📝 Text", "📸 Media", "🎤 Live Voice"])
-        
-        context_text = ""
-        live_audio_input = None
+# Tool Icons
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.file_uploader("", type=['png', 'jpg'], key="img", label_visibility="collapsed")
+    st.markdown('<div class="icon-label">🖼️</div>', unsafe_allow_html=True)
+with c2:
+    st.markdown('<div style="text-align:center; margin-top:-10px;">', unsafe_allow_html=True)
+    voice = mic_recorder(start_prompt="🎙️", stop_prompt="🛑", key='mic')
+    st.markdown('</div>', unsafe_allow_html=True)
+with c3:
+    st.file_uploader("", type=['mp4'], key="vid", label_visibility="collapsed")
+    st.markdown('<div class="icon-label">🎥</div>', unsafe_allow_html=True)
 
-        with tab1:
-            context_text = st.text_area("Context", placeholder="Describe your situation...", height=150)
+# Energy Slider
+energy = st.select_slider("", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"], label_visibility="collapsed")
 
-        with tab2:
-            st.write("Analyze visuals or video files")
-            image_file = st.file_uploader("Upload screenshot or image", type=['png', 'jpg', 'jpeg'])
-            video_file = st.file_uploader("Upload video context", type=['mp4', 'mov'])
-
-        with tab3:
-            st.write("Click to Record (Live Mic)")
-            # This adds the Mic Icon and Recording capability
-            audio_record = mic_recorder(
-                start_prompt="Start Recording 🎙️",
-                stop_prompt="Stop Recording 🛑",
-                key='recorder'
-            )
+# Execute
+if st.button("", icon=":material/arrow_forward:"):
+    if situation or voice:
+        with st.spinner(""):
+            final_msg = situation
+            if voice:
+                buf = io.BytesIO(voice['bytes'])
+                buf.name = "audio.wav"
+                trans = client.audio.transcriptions.create(file=buf, model="whisper-large-v3", response_format="text")
+                final_msg += f" {trans}"
             
-            if audio_record:
-                st.audio(audio_record['bytes'])
-                live_audio_input = audio_record['bytes']
-
-        st.write("### Select Energy")
-        energy_level = st.select_slider("", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"])
-
-        # Final Action Button
-        if st.button("", icon=":material/arrow_forward:"):
-            with st.spinner("Processing Multimodal Context..."):
-                final_input = context_text
-                
-                # Handle Live Voice Transcription
-                if live_audio_input:
-                    # Convert bytes to file-like object for Groq Whisper
-                    buffer = io.BytesIO(live_audio_input)
-                    buffer.name = "recording.wav"
-                    transcription = client.audio.transcriptions.create(
-                        file=buffer,
-                        model="whisper-large-v3",
-                        response_format="text"
-                    )
-                    final_input += f"\n[Live Voice Transcript: {transcription}]"
-
-                # Handle Image Analysis (Vision)
-                if image_file:
-                    base64_image = base64.b64encode(image_file.getvalue()).decode('utf-8')
-                    vision_resp = client.chat.completions.create(
-                        model="llama-3.2-11b-vision-preview",
-                        messages=[{
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "What is happening in this image?"},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                            ]
-                        }]
-                    )
-                    final_input += f"\n[Visual Analysis: {vision_resp.choices[0].message.content}]"
-
-                # Final Refinement
-                if final_input.strip() == "":
-                    st.warning("Please provide some form of input (Text or Voice).")
-                else:
-                    response = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
-                        messages=[
-                            {"role": "system", "content": f"You are a communication strategist. Rewrite the user input using '{energy_level}' energy. Concise, powerful, high-status. Provide only the text."},
-                            {"role": "user", "content": final_input}
-                        ]
-                    )
-                    
-                    output = response.choices[0].message.content
-                    st.session_state.history.append({"energy": energy_level, "result": output})
-                    
-                    st.divider()
-                    st.success(output)
-                    
-    except Exception as e:
-        st.error(f"System Error: {e}")
-else:
-    st.info("Please enter your Groq API Key in the sidebar.")
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": f"High-status {energy} rewrite. Sharp and concise."},
+                    {"role": "user", "content": final_msg}
+                ]
+            )
+            st.markdown(f"<div style='background:#111; padding:20px; border-radius:15px; border-left:4px solid #FFD700; color:#FFD700;'>{resp.choices[0].message.content}</div>", unsafe_allow_html=True)
