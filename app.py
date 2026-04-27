@@ -11,7 +11,7 @@ with st.sidebar:
 
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
     situation = st.text_area("What's the situation?", placeholder="e.g., Asking for a deadline extension")
     aura = st.select_slider("Select your Aura", options=["Soft Power", "Unbothered", "Confident", "CEO", "Bold"])
 
